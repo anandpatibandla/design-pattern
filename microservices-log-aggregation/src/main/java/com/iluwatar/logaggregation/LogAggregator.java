@@ -27,6 +27,7 @@ package com.iluwatar.logaggregation;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
@@ -46,6 +47,7 @@ public class LogAggregator {
   private final ConcurrentLinkedQueue<LogEntry> buffer = new ConcurrentLinkedQueue<>();
   private final LogLevel minLogLevel;
   private final ExecutorService executorService = Executors.newSingleThreadExecutor();
+  private final Object bufferWait = new Object();
   private final AtomicInteger logCount = new AtomicInteger(0);
 
   /**
@@ -77,6 +79,7 @@ public class LogAggregator {
     }
 
     buffer.offer(logEntry);
+    bufferWake();
 
     if (logCount.incrementAndGet() >= BUFFER_THRESHOLD) {
       flushBuffer();
@@ -106,15 +109,29 @@ public class LogAggregator {
   }
 
   private void startBufferFlusher() {
-    executorService.execute(() -> {
+    ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+    scheduler.scheduleAtFixedRate(() -> {
       while (!Thread.currentThread().isInterrupted()) {
         try {
-          Thread.sleep(5000); // Flush every 5 seconds.
+          synchronized (bufferWait) {
+            if (buffer.isEmpty()) {
+              bufferWait.wait();
+            }
+          }
           flushBuffer();
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
         }
       }
-    });
+    }, 5, 5, TimeUnit.SECONDS);
+  }
+
+  /**
+   * Wakes up buffer.
+   */
+  public void bufferWake() {
+    synchronized (bufferWait) {
+      bufferWait.notifyAll();
+    }
   }
 }

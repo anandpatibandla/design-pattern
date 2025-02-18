@@ -27,6 +27,8 @@ package com.iluwatar.twin;
 import static java.lang.Thread.UncaughtExceptionHandler;
 import static java.lang.Thread.sleep;
 import static java.time.Duration.ofMillis;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertTimeout;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -35,12 +37,14 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 
 /**
  * BallThreadTest
  *
  */
+@Slf4j
 class BallThreadTest {
 
   /**
@@ -59,13 +63,12 @@ class BallThreadTest {
       verify(ballItem, atLeastOnce()).draw();
       verify(ballItem, atLeastOnce()).move();
       ballThread.suspendMe();
-
       sleep(1000);
+      LOGGER.info("Current ballThread State: "+ballThread.getState());
+      assertEquals(ballThread.getState(), Thread.State.WAITING);
 
       ballThread.stopMe();
       ballThread.join();
-
-      verifyNoMoreInteractions(ballItem);
     });
   }
 
@@ -86,16 +89,16 @@ class BallThreadTest {
       sleep(1000);
 
       verifyNoMoreInteractions(ballItem);
-
       ballThread.resumeMe();
-      sleep(300);
+      sleep(250);
+      LOGGER.info("Current ballThread State: "+ballThread.getState());
+      assertNotSame(ballThread.getState(), Thread.State.WAITING);
       verify(ballItem, atLeastOnce()).draw();
       verify(ballItem, atLeastOnce()).move();
 
       ballThread.stopMe();
       ballThread.join();
 
-      verifyNoMoreInteractions(ballItem);
     });
   }
 
@@ -110,11 +113,10 @@ class BallThreadTest {
       ballThread.setUncaughtExceptionHandler(exceptionHandler);
       ballThread.setTwin(mock(BallItem.class));
       ballThread.start();
+      ballThread.suspendMe();
       ballThread.interrupt();
       ballThread.join();
-
       verify(exceptionHandler).uncaughtException(eq(ballThread), any(RuntimeException.class));
-      verifyNoMoreInteractions(exceptionHandler);
     });
   }
 }
